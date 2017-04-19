@@ -1,7 +1,9 @@
 const Hapi = require('hapi');
 const Good = require('good');
 const Joi = require('joi');
-
+const Inert = require('inert');
+const Vision = require('vision');
+const HapiSwagger = require('hapi-swagger');
 
 const server = new Hapi.Server();
 
@@ -33,14 +35,38 @@ var state = {
     maxId: 2
 };
 
+const detailLineSchema = Joi.object({
+    id: Joi.number().required(),
+    description: Joi.string(),
+    purchased: Joi.bool(),
+    added: Joi.date()
+});
 
 server.route({
     method: 'GET',
     path: '/shoppinglist',
+
     handler: function (request, reply) {
         return reply({
             _embedded: state.allIds.map(i => state.entities[i])
         });
+    },
+    config: {
+        tags: ["api"],
+        notes: ["Give you a list of your shopping items"],
+        plugins: {
+            'hapi-swagger': {
+                responses: {
+                    '200': {
+                        description: 'Success!',
+                        schema: Joi.object({
+                            "_embedded": Joi.array().items(detailLineSchema)
+                        })
+                    }
+                }
+            }
+        }
+
     }
 });
 server.route({
@@ -55,9 +81,24 @@ server.route({
         }
     },
     config: {
+        tags: ["api"],
+        notes: ["Allows you to retreive a single shopping item"],
         validate: {
             params: {
                 id: Joi.number().required()
+            }
+        },
+        plugins: {
+            'hapi-swagger': {
+                responses: {
+                    '200': {
+                        description: 'Your shopping item',
+                        schema: detailLineSchema
+                    },
+                    '404': {
+                        description: 'No Item with that Id'
+                    }
+                }
             }
         }
     }
@@ -72,12 +113,24 @@ server.route({
         return reply(state.entities[entity.id]);
     },
     config: {
+        tags: ["api"],
+        notes: ["Allows you to put the item in the 'purchased' bucket"],
         validate: {
             payload: {
                 description: Joi.string().max(50).min(3).required(),
                 added: Joi.date().required(),
                 id: Joi.number().required(),
                 purchased: Joi.bool().required()
+            }
+        },
+        plugins: {
+            'hapi-swagger': {
+                responses: {
+                    '200': {
+                        description: 'Your item is purchased',
+                        schema: detailLineSchema
+                    }
+                }
             }
         }
     }
@@ -92,6 +145,8 @@ server.route({
         return reply(state.entities[entity.id]);
     },
     config: {
+        tags: ["api"],
+        notes: ["Allows you to put your item in the 'unpurchased' bucket"],
         validate: {
             payload: {
                 description: Joi.string().max(50).min(3).required(),
@@ -99,7 +154,18 @@ server.route({
                 id: Joi.number().required(),
                 purchased: Joi.bool().required()
             }
+        },
+        plugins: {
+            'hapi-swagger': {
+                responses: {
+                    '200': {
+                        description: 'Your item is unpurchased',
+                        schema: detailLineSchema
+                    }
+                }
+            }
         }
+
     }
 });
 server.route({
@@ -122,43 +188,74 @@ server.route({
             .header("location", url);
     },
     config: {
+        tags: ["api"],
+        notes: ["Allows you to add an item to the api"],
         validate: {
             payload: {
                 description: Joi.string().max(50).min(3).required(),
                 added: Joi.date().required()
             }
+        },
+         plugins: {
+            'hapi-swagger': {
+                responses: {
+                    '200': {
+                        description: 'Your item is added',
+                        schema: detailLineSchema
+                    }
+                }
+            }
         }
     }
 })
 
-
-server.register({
-    register: Good,
-    options: {
-        reporters: {
-            console: [{
-                module: 'good-squeeze',
-                name: 'Squeeze',
-                args: [{
-                    response: '*',
-                    log: '*'
-                }]
-            }, {
-                module: 'good-console'
-            }, 'stdout']
+const options = {
+    info: {
+        'title': 'Shopping Api',
+        'version': '0.1.0',
+        'contact': {
+            name: 'Jeff Gonzalez',
+            email: 'jeff@hypertheory.com'
         }
-    }
-}, (err) => {
+    },
+    'schemes': ['http'],
+    host: 'localhost:3000'
+};
 
-    if (err) {
-        throw err; // something bad happened loading the plugin
-    }
-
-    server.start((err) => {
+server.register(
+    [Inert,
+        Vision, {
+            'register': HapiSwagger,
+            'options': options
+        },
+        {
+            register: Good,
+            options: {
+                reporters: {
+                    console: [{
+                        module: 'good-squeeze',
+                        name: 'Squeeze',
+                        args: [{
+                            response: '*',
+                            log: '*'
+                        }]
+                    }, {
+                        module: 'good-console'
+                    }, 'stdout']
+                }
+            }
+        }
+    ], (err) => {
 
         if (err) {
-            throw err;
+            throw err; // something bad happened loading the plugin
         }
-        server.log('info', 'Server running at: ' + server.info.uri);
+
+        server.start((err) => {
+
+            if (err) {
+                throw err;
+            }
+            server.log('info', 'Server running at: ' + server.info.uri);
+        });
     });
-});
