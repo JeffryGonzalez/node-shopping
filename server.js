@@ -11,7 +11,12 @@ server.connection({
     host: 'localhost',
     port: 3000,
     routes: {
-        cors: true
+        cors: true,
+        validate: {
+            options: {
+                abortEarly: false
+            }
+        }
     }
 });
 
@@ -47,9 +52,11 @@ server.route({
     path: '/shoppinglist',
 
     handler: function (request, reply) {
-        return reply({
-            _embedded: state.allIds.map(i => state.entities[i])
-        });
+        setTimeout(function () {
+            return reply({
+                _embedded: state.allIds.map(i => state.entities[i])
+            });
+        }, 3000);
     },
     config: {
         tags: ["api"],
@@ -192,11 +199,11 @@ server.route({
         notes: ["Allows you to add an item to the api"],
         validate: {
             payload: {
-                description: Joi.string().max(50).min(3).required(),
+                description: Joi.string().max(50).min(3).invalid('soda').required(),
                 added: Joi.date().required()
             }
         },
-         plugins: {
+        plugins: {
             'hapi-swagger': {
                 responses: {
                     '200': {
